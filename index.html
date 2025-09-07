@@ -1,0 +1,635 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neonatal EOS Calculator — Offline (Fixed Tooltips & Units)</title>
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#555; --blue:#003b71; --info:#f0f7fa; --infoborder:#bfe2f0; }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; }
+  header { padding:14px 20px; border-bottom:1px solid #eee; position:sticky; top:0; background:var(--bg); }
+  main { max-width: 980px; margin: 0 auto; padding: 18px; }
+  h1 { font-size: 1.25rem; margin: 0 0 6px 0; }
+  h2 { font-size: 1.1rem; margin-top: 18px; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { border:1px solid #ddd; padding:10px; vertical-align: middle; }
+  th { background:var(--blue); color:white; }
+  .card { border:1px solid #ddd; border-radius:10px; padding:12px; margin-bottom:14px; }
+  .banner { background:#fffbeb; border:1px solid #f5e6a3; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+  .infobox { background:var(--info); border:1px solid var(--infoborder); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .row { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  input[type="number"], select { width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; font-size:1rem; }
+  .input-badge { display:inline-block; padding:10px 12px; border:1px solid #ddd; border-radius:10px; background:#fafafa; min-width:56px; text-align:center; }
+  .hint { font-size:.85rem; color:var(--muted); }
+  .big { font-size: 2.0rem; font-weight: 700; text-align: center; letter-spacing: .3px; }
+  .recCell { font-weight:600; text-align:center; }
+  .rec-green { background: #1f4f11; color:#fff; }
+  .rec-yellow { background: #fffda9; color:#000; }
+  .rec-red { background: #8b1a12; color:#fff; }
+  .vitals-green { background:#e6f1e8; }
+  .vitals-yellow { background:#fff7c2; }
+  .vitals-red { background:#ffd9d4; }
+  .choice { display:flex; flex-direction:column; gap:8px; }
+  .choice > .group-title { font-weight:600; margin-bottom:2px; display:flex; align-items:center; gap:8px; }
+  .choice label.item { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #e5e5e5; border-radius:10px; cursor:pointer; }
+  .choice input[type="radio"] { width:20px; height:20px; }
+  .choice label.item.selected { font-weight: 700; border-color:#b5c6ff; box-shadow: 0 0 0 2px #e6edff inset; }
+  /* Tips */
+  .tip { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#000; color:#fff; font-size:.8rem; font-weight:700; cursor:pointer; user-select:none; }
+  .tip:hover { opacity:.85; }
+  .tooltip { position:absolute; z-index:9999; background:#000; color:#fff; padding:8px 10px; border-radius:6px; max-width: 360px; font-size:.9rem; box-shadow:0 4px 12px rgba(0,0,0,.3); }.tooltip.imgtip { background:#fff; color:#111; padding:6px; max-width: 520px; }.tooltip.imgtip img { max-width: 500px; height:auto; display:block; }
+  .tooltip.hidden { display:none; }
+  .param-title { display:flex; align-items:center; gap:8px; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .actions button { padding:8px 10px; border:1px solid #ddd; background:#f7f7f7; border-radius:8px; cursor:pointer; }
+  .actions button:hover { background:#efefef; }
+  @media print { header, .noprint { display:none; } }
+
+  .form-table { width:100%; border-collapse: collapse; }
+  .form-table th, .form-table td { border:1px solid #ddd; padding:12px; vertical-align: middle; }
+  .form-table thead th { background: var(--blue); color:#fff; }
+  .form-table .labelcell { width: 40%; background:#f7f7f9; font-weight:600; }
+  .form-table .inputcell { width: 60%; }
+  .inline { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .inline input[type="number"], .inline select { padding:12px; border-radius:10px; }
+  .radio-group { display:flex; flex-direction:column; gap:8px; }
+  .radio-group label.item { padding:12px; }
+  @media (hover:none) and (pointer:coarse){
+    .form-table th, .form-table td { padding:14px; }
+    .radio-group label.item { padding:14px; }
+  }
+
+  .flow-table { width:100%; border-collapse: collapse; }
+  .flow-table th, .flow-table td { border:1px solid #ddd; padding:12px; vertical-align: middle; }
+  .flow-table thead th { background: var(--blue); color:#fff; text-align:left; }
+  .flow-label { background:#f4f5f6; font-weight:600; }
+  .flow-rec { font-weight:700; text-align:center; }
+  .flow-green { background:#145a12; color:#fff; }
+  .flow-yellow { background:#fff59d; color:#222; }
+  .flow-red { background:#b71c1c; color:#fff; }
+  .flow-vitals-green { background:#e6f1e8; }
+  .flow-vitals-yellow { background:#fff7c2; }
+  .flow-vitals-red { background:#ffd9d4; }
+
+</style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#003b71">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(e => console.log('SW registration failed', e));
+    });
+  }
+</script>
+
+</head>
+<body>
+<header>
+  <h1>Neonatal Early-Onset Sepsis Calculator (2017 Original) — Offline Single File</h1>
+</header>
+<main>
+  <div class="banner">
+    <strong>Tip:</strong> Save to your device drive for offline use. On iOS and Android, you can “Install this page as an app” and place it on your home screen for easy access.
+  </div>
+
+  <div class="infobox">
+    <strong>Probability of Neonatal Early-Onset Sepsis Based on Maternal Risk Factors and the Infant's Clinical Presentation</strong><br>
+    The tool below is intended for the use of clinicians trained and experienced in the care of newborn infants. Using this tool, the risk of early-onset sepsis can be calculated in an infant born &gt; 34 weeks gestation. The interactive calculator produces the probability of early onset sepsis per 1000 babies by entering values for the specified maternal risk factors along with the infant's clinical presentation.
+  </div>
+
+  
+  <div class="card">
+    <h2>Please enter details below.</h2>
+    <table class="form-table">
+      <thead>
+        <tr><th class="labelcell">Predictor</th><th class="inputcell">Input</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="labelcell">
+            Incidence of Early-Onset Sepsis
+            <span class="tip" data-tip="Select rate at your institution.">?</span>
+          </td>
+          <td class="inputcell">
+            <select id="interceptPreset">
+              <option value="">—</option>
+              <option value="38.952265">0.1/1000 live births</option>
+              <option value="39.646367">0.2/1000 live births</option>
+              <option value="40.0528">0.3/1000 live births (KPNC incidence)</option>
+              <option value="40.3415">0.4/1000 live births</option>
+              <option value="40.5656">0.5/1000 live births (CDC national incidence)</option>
+              <option value="40.7489">0.6/1000 live births</option>
+              <option value="40.903919">0.7/1000 live births</option>
+              <option value="41.0384" selected>0.8/1000 live births</option>
+              <option value="41.1571">0.9/1000 live births</option>
+              <option value="41.263432">1/1000 live births</option>
+              <option value="41.965852">2/1000 live births</option>
+              <option value="42.676976">4/1000 live births</option>
+            </select>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="labelcell">
+            Gestational age
+            <span class="tip" data-tip="To the nearest week and day.">?</span>
+          </td>
+          <td class="inputcell">
+            <div class="inline">
+              <div class="inline">
+                <input type="number" id="gaWeeks" min="34" max="43" step="1" value="39" style="width:110px;">
+                <span>weeks</span>
+              </div>
+              <div class="inline">
+                <input type="number" id="gaDays" min="0" max="6" step="1" value="0" style="width:110px;">
+                <span>days</span>
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="labelcell">
+            Highest maternal antepartum temperature
+            <span class="tip" data-tip="To the nearest 0.1°. Include highest temperature from 24 hours prior to birth and up to 1 hour after time of birth.">?</span>
+          </td>
+          <td class="inputcell">
+            <div class="inline">
+              <input type="number" id="temp" step="0.1" value="37.0" style="width:120px;">
+              <span id="tempUnitBadge" class="input-badge">°C</span>
+              <select id="tempUnit">
+                <option value="F">Fahrenheit</option>
+                <option value="C" selected>Celsius</option>
+              </select>
+            </div>
+            <div class="hint">Valid range: 35.0–41.5 °C (95.0–106.7 °F)</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="labelcell">
+            ROM (Hours)
+            <span class="tip" data-tip="Duration of rupture of membranes, in hours to the nearest 0.1 hour.">?</span>
+          </td>
+          <td class="inputcell">
+            <input type="number" id="romHours" step="0.1" min="0" max="240" value="0" style="width:140px;">
+          </td>
+        </tr>
+
+        <tr>
+          <td class="labelcell">
+            Maternal GBS status
+            <span class="tip" data-tip="Any microbiological results for group B streptococcus in this pregnancy, including vaginal swabs and urine.">?</span>
+          </td>
+          <td class="inputcell">
+            <div class="radio-group">
+              <label for="gbsNeg" id="lbl-gbsNeg" class="item"><input id="gbsNeg" name="gbs" type="radio" value="neg"> Negative</label>
+              <label for="gbsPos" id="lbl-gbsPos" class="item"><input id="gbsPos" name="gbs" type="radio" value="pos"> Positive</label>
+              <label for="gbsUnk" id="lbl-gbsUnk" class="item selected"><input id="gbsUnk" name="gbs" type="radio" value="unk" checked> Unknown</label>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="labelcell">
+            Type of intrapartum antibiotics
+            <span class="tip" data-tip="Only include intrapartum antibiotics given in the 24 hours preceding the time of birth.">?</span>
+          </td>
+          <td class="inputcell">
+            <div class="radio-group">
+              <label for="abxBroad4" id="lbl-abxBroad4" class="item"><input id="abxBroad4" name="abx" type="radio" value="broad4"> Broad spectrum antibiotics &gt; 4 hrs prior to birth</label>
+              <label for="abxBroad2" id="lbl-abxBroad2" class="item"><input id="abxBroad2" name="abx" type="radio" value="broad2to4"> Broad spectrum antibiotics 2–3.9 hrs prior to birth</label>
+              <label for="abxGBS2" id="lbl-abxGBS2" class="item"><input id="abxGBS2" name="abx" type="radio" value="gbs2"> GBS specific antibiotics &gt; 2 hrs prior to birth</label>
+              <label for="abxNone" id="lbl-abxNone" class="item selected"><input id="abxNone" name="abx" type="radio" value="none" checked> No antibiotics or any antibiotics &lt; 2 hrs prior to birth</label>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th colspan="2">Risk per 1000/births</th></tr></thead>
+      <tbody>
+        <tr>
+          <td style="width:40%; background:#eee;">EOS Risk @ Birth</td>
+          <td id="riskBirth" class="big">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30%">EOS Risk after Clinical Exam</th>
+          <th style="width:20%">Risk per 1000/births</th>
+          <th style="width:25%">Clinical Recommendation <span class="tip" data-toggle="flowGuide" title="Show/hide clinical recommendation guide">?</span></th>
+          <th>Vitals</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="background:#eee;"><span>Well Appearing <span class="tip" data-tip="Well Appearing: No persistent physiologic abnormalities.">?</span></span></td>
+          <td id="riskWell" class="big">—</td>
+          <td id="recWell" class="recCell rec-green">No culture, no antibiotics</td>
+          <td id="vitalsWell" class="vitals-green">Routine Vitals</td>
+        </tr>
+        <tr>
+          <td style="background:#eee;"><span>Equivocal <span class="tip" data-tip="Equivocal: (1) Persistent physiologic abnormality &gt; 4 hrs (tachycardia HR&gt;160, tachypnoea RR&gt;60, temperature instability &gt;100.4°F or &lt;97.5°F, respiratory distress not requiring O₂). (2) Two or more abnormalities &gt; 2 hrs. Note: abnormality can be intermittent.">?</span></span></td>
+          <td id="riskEquiv" class="big">—</td>
+          <td id="recEquiv" class="recCell rec-yellow">Blood culture</td>
+          <td id="vitalsEquiv" class="vitals-yellow">Vitals every 4 hours for 24 hours</td>
+        </tr>
+        <tr>
+          <td style="background:#eee;"><span>Clinical Illness <span class="tip" data-tip="Clinical Illness: (1) Persistent need for NCPAP/HFNC/mechanical ventilation (outside delivery room). (2) Haemodynamic instability requiring vasoactive drugs. (3) Neonatal encephalopathy/Perinatal depression, seizure, Apgar &lt;5 at 5 min. (4) Need for O₂ &gt; 2 hrs to maintain sats &gt; 90% (outside delivery room).">?</span></span></td>
+          <td id="riskIll" class="big">—</td>
+          <td id="recIll" class="recCell rec-red">Empiric antibiotics</td>
+          <td id="vitalsIll" class="vitals-red">Vitals per NICU</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="actions noprint">
+      <button id="btnCopy" type="button">Copy results</button>
+      <button id="btnReset" type="button">Reset</button>
+      <button type="button" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">References</h3>
+    <p style="margin:0;">
+      Puopolo KM, Draper D, Wi S, et al. Estimating the probability of neonatal early-onset infection on the basis of maternal risk factors.
+      <em>Pediatrics</em> 2011;128(5):e1155–63. DOI: 10.1542/peds.2010-3464.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Contact</h3>
+    <p class="font14" style="margin:0;">
+      <strong>Contact me!</strong> Send your email to
+      <a href="mailto:akshay.phakey@nhs.net?Subject=EOS%20Calculator%20query">akshay.phakey@nhs.net</a>
+    </p>
+  </div>
+  <div id="flowGuide" style="display:none;">
+
+
+  <div class="card">
+    <h2 style="margin-top:0;">Clinical Recommendation Guide (Offline)</h2>
+    <table class="flow-table">
+      <thead>
+        <tr>
+          <th style="width:25%;">Composite EOS Risk<br><span class="hint">(risk at birth + clinical exam)</span></th>
+          <th style="width:20%;">EOS Risk at Birth</th>
+          <th style="width:30%;">Clinical Recommendation <span class="tip" data-toggle="flowGuide" title="Show/hide clinical recommendation guide">?</span></th>
+          <th>Vitals</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="flow-label">&lt; 1</td>
+          <td>&lt; 1</td>
+          <td class="flow-rec flow-green">No culture, no antibiotics</td>
+          <td class="flow-vitals-green">Routine Vitals</td>
+        </tr>
+        <tr>
+          <td class="flow-label">&lt; 1</td>
+          <td>&ge; 1</td>
+          <td class="flow-rec flow-yellow">No culture, no antibiotics</td>
+          <td class="flow-vitals-yellow">Vitals every 4 hours for 24 hours</td>
+        </tr>
+        <tr>
+          <td class="flow-label">1 – &lt; 3</td>
+          <td>—</td>
+          <td class="flow-rec flow-yellow">Blood culture</td>
+          <td class="flow-vitals-yellow">Vitals every 4 hours for 24 hours</td>
+        </tr>
+        <tr>
+          <td class="flow-label">&ge; 3</td>
+          <td>—</td>
+          <td class="flow-rec flow-red">Empiric antibiotics</td>
+          <td class="flow-vitals-red">Vitals per NICU</td>
+        </tr>
+        <tr>
+          <td class="flow-label">&lt; 3 with Clinical illness = yes<br><span class="hint">(** If clinical exam = clinical illness and composite risk &lt; 3)</span></td>
+          <td>—</td>
+          <td class="flow-rec flow-red">Strongly consider starting empiric antibiotics</td>
+          <td class="flow-vitals-red">Vitals per NICU</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  </div>
+
+
+</main>
+
+<script>
+// ===== Tooltip system (black box, white text, toggle on click) =====
+(function(){
+  let openTip = null;
+  function positionTooltip(el, tip){
+    const rect = el.getBoundingClientRect();
+    const pageX = window.scrollX || document.documentElement.scrollLeft;
+    const pageY = window.scrollY || document.documentElement.scrollTop;
+    const top = pageY + rect.top + rect.height + 8;
+    const left = pageX + rect.left;
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+  function makeTooltip(el){
+    // Toggle target support
+    const toggleTarget = el.dataset.toggle || '';
+    if (toggleTarget){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        const box = document.getElementById(toggleTarget);
+        if (box){ box.style.display = (box.style.display === 'none' || box.style.display === '') ? 'block' : 'none'; }
+      });
+      return; // do not create tooltip for toggle buttons
+    }
+    const text = el.dataset.tip || '';
+    const img = el.dataset.img || '';
+    const tip = document.createElement('div');
+    tip.className = 'tooltip hidden' + (img ? ' imgtip' : '');
+    if (img) {
+      const image = document.createElement('img');
+      image.src = img; // relative path in the same folder
+      image.alt = text || 'Clinical recommendation diagram';
+      tip.appendChild(image);
+    } else {
+      tip.textContent = text;
+    }
+    document.body.appendChild(tip);
+
+    el.addEventListener('click', function(e){
+      e.stopPropagation();
+      const isOpen = !tip.classList.contains('hidden');
+      if (openTip && openTip !== tip){ openTip.classList.add('hidden'); openTip = null; }
+      if (isOpen){
+        tip.classList.add('hidden');
+        openTip = null;
+      } else {
+        positionTooltip(el, tip);
+        tip.classList.remove('hidden');
+        openTip = tip;
+      }
+    });
+    window.addEventListener('resize', () => { if (!tip.classList.contains('hidden')) positionTooltip(el, tip); });
+  }
+  document.addEventListener('click', () => { if (openTip){ openTip.classList.add('hidden'); openTip = null; } });
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.tip').forEach(makeTooltip);
+  });
+})();
+
+// ===== Units & inputs =====
+function toFahrenheit(v, unit){
+  if (v === '' || v === null || typeof v === 'undefined') return NaN;
+  v = Number(v);
+  if (!isFinite(v)) return NaN;
+  return unit === 'F' ? v : (v * 9/5) + 32;
+}
+function round2(x){ return Math.round((x + Number.EPSILON) * 100) / 100; }
+
+// ===== Coefficients =====
+const COEF = {
+  temp: 0.8680,
+  rom:  1.2256,
+  ga:  -6.9325,
+  ga2:  0.0877,
+  tx1: -1.0488,
+  tx2: -1.1861,
+  gbsP: 0.5771,
+  gbsU: 0.0427
+};
+const LRS = { well: 0.41, equiv: 5.0, ill: 21.2 };
+
+// Bold selection behaviour for label-click groups
+function attachSelectable(groupName){
+  const inputs = document.querySelectorAll(`input[name="${groupName}"]`);
+  const labels = {};
+  inputs.forEach(i => { labels[i.id] = document.querySelector(`label[for="${i.id}"]`); });
+  function refresh(){
+    inputs.forEach(i => {
+      const lbl = labels[i.id];
+      if (lbl) lbl.classList.toggle('selected', i.checked);
+    });
+  }
+  inputs.forEach(i => i.addEventListener('change', () => { refresh(); computeAll(); }));
+  Object.values(labels).forEach(lbl => lbl.addEventListener('click', () => setTimeout(refresh, 0)));
+  refresh();
+}
+
+// Dynamic unit badge + value conversion
+function updateTempUnit(){
+  const sel = document.getElementById('tempUnit');
+  const badge = document.getElementById('tempUnitBadge');
+  const input = document.getElementById('temp');
+  const from = input.dataset.unit || 'C';
+  const to = sel.value;
+  // Convert value between units if changing
+  let v = Number(input.value);
+  if (isFinite(v) && from !== to){
+    if (to === 'C'){ v = (v - 32) * 5/9; }
+    else { v = (v * 9/5) + 32; }
+    input.value = round2(v).toFixed(1);
+  }
+  input.dataset.unit = to;
+  badge.textContent = (to === 'C') ? '°C' : '°F';
+}
+
+// ===== Compute engine =====
+function computeAll(){
+  const intercept = Number(document.getElementById('interceptPreset').value || 0);
+  const tempVal = Number(document.getElementById('temp').value);
+  const tempUnit = document.getElementById('tempUnit').value;
+  const tempF = toFahrenheit(tempVal, tempUnit);
+
+  const gaW = Number(document.getElementById('gaWeeks').value || 0);
+  const gaD = Number(document.getElementById('gaDays').value || 0);
+  const ga = gaW + (gaD/7);
+  const ga_sq = ga * ga;
+
+  const romH = Math.max(0, Number(document.getElementById('romHours').value || 0));
+  const romimp = Math.pow(romH + 0.05, 0.2);
+
+  const gbs = document.querySelector('input[name="gbs"]:checked')?.value || '';
+  const j_pos = gbs === 'pos' ? 1 : 0;
+  const j_unk = gbs === 'unk' ? 1 : 0;
+
+  const abxSel = document.querySelector('input[name="abx"]:checked')?.value || '';
+  const approptx1 = (abxSel === 'gbs2' || abxSel === 'broad2to4') ? 1 : 0;
+  const approptx2 = (abxSel === 'broad4') ? 1 : 0;
+
+  const beta = Number(intercept||0)
+             + (isFinite(tempF) ? COEF.temp * tempF : 0)
+             + COEF.rom * romimp
+             + COEF.ga  * ga
+             + COEF.ga2 * ga_sq
+             + COEF.tx1 * approptx1
+             + COEF.tx2 * approptx2
+             + COEF.gbsP * j_pos
+             + COEF.gbsU * j_unk;
+
+  const srs = 1 / (1 + Math.exp(-beta));
+  const srs1000 = srs * 1000;
+  document.getElementById('riskBirth').textContent = isFinite(srs1000) ? round2(srs1000).toFixed(2) : '—';
+
+  const priorOdds = srs / (1 - srs);
+
+  function computeRow(lr, riskId, recId, vitId, clinicalIll){
+    const postOdds = priorOdds * lr;
+    const postProb = postOdds / (1 + postOdds);
+    const comp1000 = postProb * 1000;
+    document.getElementById(riskId).textContent = isFinite(comp1000) ? round2(comp1000).toFixed(2) : '—';
+
+    let recClass, recText, vitClass, vitText;
+    if (comp1000 < 1){
+      recClass = 'rec-green'; recText = 'No culture, no antibiotics';
+      vitClass = (srs1000 < 1 ? 'vitals-green' : 'vitals-yellow');
+      vitText = (srs1000 < 1 ? 'Routine Vitals' : 'Vitals every 4 hours for 24 hours');
+    } else if (comp1000 < 3){
+      if (clinicalIll){
+        recClass = 'rec-red'; recText = 'Empiric antibiotics (strongly consider)';
+        vitClass = 'vitals-red'; vitText = 'Vitals per NICU';
+      } else {
+        recClass = 'rec-yellow'; recText = 'Blood culture';
+        vitClass = 'vitals-yellow'; vitText = 'Vitals every 4 hours for 24 hours';
+      }
+    } else {
+      recClass = 'rec-red'; recText = 'Empiric antibiotics';
+      vitClass = 'vitals-red'; vitText = 'Vitals per NICU';
+    }
+    const recEl = document.getElementById(recId);
+    recEl.textContent = recText;
+    recEl.className = 'recCell ' + recClass;
+    const vitEl = document.getElementById(vitId);
+    vitEl.textContent = vitText;
+    vitEl.className = vitClass;
+  }
+
+  computeRow(LRS.well,  'riskWell',  'recWell',  'vitalsWell',  false);
+  computeRow(LRS.equiv, 'riskEquiv', 'recEquiv', 'vitalsEquiv', false);
+  computeRow(LRS.ill,   'riskIll',   'recIll',   'vitalsIll',   true);
+}
+
+// ===== Reset & Copy =====
+function resetToDefaults(){
+  document.getElementById('interceptPreset').value = '41.0384'; // 0.8/1000
+  document.getElementById('gaWeeks').value = 39;
+  document.getElementById('gaDays').value = 0;
+  document.getElementById('tempUnit').value = 'C';
+  document.getElementById('temp').dataset.unit = 'C';
+  document.getElementById('temp').value = '37.0';
+  document.getElementById('tempUnitBadge').textContent = '°C';
+  document.getElementById('romHours').value = 0;
+  document.getElementById('gbsUnk').checked = true;
+  document.getElementById('abxNone').checked = true;
+  // refresh label bolding
+  ['gbs','abx'].forEach(name => {
+    const inputs = document.querySelectorAll(`input[name="${name}"]`);
+    inputs.forEach(i => {
+      const lbl = document.querySelector(`label[for="${i.id}"]`);
+      if (lbl) lbl.classList.toggle('selected', i.checked);
+    });
+  });
+  computeAll();
+}
+async function copyResults(){
+  function val(id){ const el = document.getElementById(id); return el ? el.textContent.trim() : ''; }
+  function getSelText(selId){
+    const s = document.getElementById(selId);
+    if (!s) return '';
+    const opt = s.options[s.selectedIndex];
+    return opt ? opt.text : '';
+  }
+  function getRadio(name){
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    if (!el) return '';
+    const lbl = document.querySelector(`label[for="${el.id}"]`);
+    return lbl ? lbl.textContent.trim() : el.value;
+  }
+  const lines = [];
+  lines.push('Neonatal EOS Calculator — Results');
+  lines.push('--------------------------------');
+  lines.push('Inputs:');
+  lines.push(`- Incidence: ${getSelText('interceptPreset')}`);
+  lines.push(`- Gestational age: ${document.getElementById('gaWeeks').value} weeks + ${document.getElementById('gaDays').value} days`);
+  lines.push(`- Maternal temp: ${document.getElementById('temp').value} ${document.getElementById('tempUnit').value === 'C' ? '°C' : '°F'}`);
+  lines.push(`- ROM: ${document.getElementById('romHours').value} hours`);
+  lines.push(`- GBS status: ${getRadio('gbs')}`);
+  lines.push(`- Intrapartum antibiotics: ${getRadio('abx')}`);
+  lines.push('');
+  lines.push('Outputs (per 1000 births):');
+  lines.push(`- EOS Risk @ Birth: ${val('riskBirth')}`);
+  lines.push(`- Well Appearing: ${val('riskWell')}`);
+  lines.push(`  • Recommendation: ${document.getElementById('recWell').textContent.trim()}`);
+  lines.push(`  • Vitals: ${document.getElementById('vitalsWell').textContent.trim()}`);
+  lines.push(`- Equivocal: ${val('riskEquiv')}`);
+  lines.push(`  • Recommendation: ${document.getElementById('recEquiv').textContent.trim()}`);
+  lines.push(`  • Vitals: ${document.getElementById('vitalsEquiv').textContent.trim()}`);
+  lines.push(`- Clinical Illness: ${val('riskIll')}`);
+  lines.push(`  • Recommendation: ${document.getElementById('recIll').textContent.trim()}`);
+  lines.push(`  • Vitals: ${document.getElementById('vitalsIll').textContent.trim()}`);
+  const text = lines.join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    alert('Results copied to clipboard.');
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand('copy'); alert('Results copied to clipboard.'); }
+    catch{ alert('Copy failed. You can select and copy manually:\n\n' + text); }
+    document.body.removeChild(ta);
+  }
+}
+
+// ===== Wire up =====
+document.addEventListener('DOMContentLoaded', () => {
+  // Inputs that trigger recompute
+  ['interceptPreset','gaWeeks','gaDays','temp','tempUnit','romHours'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      if (id === 'tempUnit'){ updateTempUnit(); }
+      computeAll();
+    });
+  });
+  // Group selections
+  attachSelectable('gbs');
+  attachSelectable('abx');
+
+  // Buttons
+  const btnR = document.getElementById('btnReset');
+  const btnC = document.getElementById('btnCopy');
+  if (btnR) btnR.addEventListener('click', resetToDefaults);
+  if (btnC) btnC.addEventListener('click', copyResults);
+
+  // Initialise
+  document.getElementById('temp').dataset.unit = 'C';
+  updateTempUnit(); // sets badge correctly
+  computeAll();
+});
+</script>
+
+
+
+  <div class="card">
+    <h3 style="margin-top:0;">Acknowledgements</h3>
+    <p style="margin:0;">
+      We gratefully acknowledge
+      <a href="https://neonatalsepsiscalculator.kaiserpermanente.org/InfectionProbabilityCalculatorOrig.aspx" target="_blank">
+      Kaiser Permanente</a> for developing the Early-Onset Sepsis Calculator, for declaring it open-source, and for providing related documentation including extensive instructions on how to implement their calculations in local EMRs.
+    </p>
+  </div>
+
+
+
+</body>
+</html>
